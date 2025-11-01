@@ -1,227 +1,564 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gtk Substitution Timetable</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Substitution Timetable — School</title>
 <style>
-  body {
-    font-family: "Segoe UI", sans-serif;
-    margin: 20px;
-    background-color: #f4f6f9;
+  :root{
+    --brand:#0f62fe;
+    --accent:#ff8c42;
+    --danger:#e74c3c;
+    --muted:#6b7280;
+    --card:#ffffff;
+    --bg:#f3f6fb;
   }
-  h1, h2 {
-    text-align: center;
-    color: #2c3e50;
+  *{box-sizing:border-box}
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; margin:0; background:var(--bg); color:#0b2545}
+  .wrap{max-width:980px;margin:18px auto;padding:18px}
+  .card{background:var(--card);border-radius:12px;padding:14px 18px;box-shadow:0 6px 22px rgba(11,37,69,0.06);margin-bottom:14px}
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  h1{margin:0;font-size:20px}
+  .muted{color:var(--muted);font-size:13px}
+  label{display:block;font-size:14px;margin-bottom:6px;color:#0b2545}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .col{flex:1;min-width:120px}
+  input[type="text"], select, textarea{
+    width:100%;padding:10px;border-radius:8px;border:1px solid #d8e1f2;font-size:14px;background:#fff;
   }
-  .container {
-    max-width: 1000px;
-    margin: auto;
-    background: white;
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 0 10px rgba(0,0,0,0.1);
-  }
-  label {
-    font-weight: bold;
-  }
-  select, input, button, textarea {
-    margin: 5px;
-    padding: 6px;
-    border-radius: 5px;
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 15px;
-  }
-  th, td {
-    border: 1px solid #999;
-    padding: 6px;
-    text-align: center;
-  }
-  th {
-    background: #dfe6e9;
-  }
-  button {
-    background: #3498db;
-    color: white;
-    border: none;
-    cursor: pointer;
-  }
-  button:hover {
-    background: #2980b9;
-  }
-  .print-area {
-    display: none;
-  }
+  textarea{resize:vertical}
+  .small{width:120px}
+  .btn{display:inline-block;padding:8px 12px;border-radius:8px;border:none;background:var(--brand);color:#fff;cursor:pointer;font-weight:600}
+  .btn.secondary{background:#fff;color:var(--brand);border:1px solid #d6e0ff}
+  .btn.warn{background:var(--accent);color:#fff}
+  .btn.danger{background:var(--danger);color:#fff}
+  .btn.ghost{background:transparent;border:1px solid #e6eefc;color:var(--brand)}
+  table{width:100%;border-collapse:collapse;margin-top:12px;font-size:14px}
+  th,td{padding:8px;border:1px solid #e9eef6;text-align:left}
+  th{background:#f8fbff}
+  td.actions{text-align:right;white-space:nowrap}
+  .small-btn{padding:6px 8px;border-radius:6px;font-size:13px;margin-left:6px}
+  .small-btn.edit{background:#f7f9ff;border:1px solid #d6e0ff;color:var(--brand)}
+  .small-btn.del{background:#fff;border:1px solid #ffdfe0;color:var(--danger)}
+  .controls{display:flex;gap:8px;align-items:center}
+  .confirm-row{margin-top:10px}
+  .topline{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  /* print area CSS */
+  .print-area{display:none}
   @media print {
-    body * { visibility: hidden; }
-    .print-area, .print-area * { visibility: visible; }
-    .print-area { position: absolute; left: 0; top: 0; width: 100%; }
+    body *{visibility:hidden}
+    .print-area, .print-area *{visibility:visible}
+    .print-area{position:fixed;left:0;top:0;width:100%;padding:18px;background:#fff}
+    .no-print{display:none}
+    table{font-size:12px}
+  }
+  /* responsive adjustments */
+  @media(max-width:600px){
+    .row{flex-direction:column}
+    .topline{flex-direction:column;align-items:flex-start}
+    .small{width:100%}
+    td.actions{display:block}
   }
 </style>
 </head>
 <body>
+  <div class="wrap">
+    <div class="card topline">
+      <div style="flex:1">
+        <h1>Substitution Timetable Generator</h1>
+        <div class="muted">Create daily substitution sheets quickly — data saved locally on device</div>
+      </div>
+      <div class="no-print">
+        <div style="text-align:right">
+          <div class="muted" style="font-size:12px">Today:</div>
+          <strong id="todayLabel"></strong>
+        </div>
+      </div>
+    </div>
 
-<div class="container">
-  <h1>School Substitution Timetable</h1>
+    <!-- School name -->
+    <div class="card">
+      <label for="schoolName">School Name</label>
+      <div class="row">
+        <input type="text" id="schoolName" placeholder="Enter school name (saved locally)" />
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn" id="saveSchoolBtn">Save</button>
+          <button class="btn secondary no-print" id="changeSchoolBtn">Change</button>
+        </div>
+      </div>
+      <div class="muted" style="margin-top:8px">The school name will be shown on the screen and on printouts.</div>
+    </div>
 
-  <h2>1️⃣ One-Time Timetable Setup</h2>
-  <label>Day:</label>
-  <select id="dayInput">
-    <option>Monday</option>
-    <option>Tuesday</option>
-    <option>Wednesday</option>
-    <option>Thursday</option>
-    <option>Friday</option>
-  </select>
-  <label>Class:</label>
-  <input type="text" id="classInput" placeholder="e.g. 10A">
-  <label>Period:</label>
-  <input type="text" id="periodInput" placeholder="e.g. P1">
-  <label>Teacher:</label>
-  <input type="text" id="teacherInput" placeholder="e.g. Mr. Rao">
-  <button onclick="addTimetable()">Add Entry</button>
-  <button onclick="resetTimetable()">Reset All</button>
+    <!-- Timetable setup -->
+    <div class="card">
+      <h2 style="margin:0 0 8px 0">1. One-Time Timetable Setup</h2>
+      <div class="muted">Choose Day, add Class + Period + Teacher. Use Edit/Delete for rows. You can also delete one day's schedule or reset all.</div>
 
-  <h3>Current Timetable Entries</h3>
-  <table id="timetableDisplay">
-    <tr><th>Day</th><th>Class</th><th>Period</th><th>Teacher</th></tr>
-  </table>
+      <div style="margin-top:12px" class="row">
+        <div class="col">
+          <label>Day</label>
+          <select id="daySelect">
+            <option>Monday</option>
+            <option>Tuesday</option>
+            <option>Wednesday</option>
+            <option>Thursday</option>
+            <option>Friday</option>
+          </select>
+        </div>
 
-  <h2>2️⃣ Today's Substitution</h2>
-  <label>Absent Teachers (comma separated):</label><br>
-  <textarea id="absentInput" rows="2" cols="50" placeholder="e.g. Mr. Rao, Ms. Devi"></textarea><br>
-  <button onclick="generateSubstitution()">Generate Substitution</button>
-  <button onclick="printSubstitution()">Print / Export</button>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div style="min-width:160px">
+            <label>Class</label>
+            <input id="classInput" type="text" placeholder="e.g. 8A" />
+          </div>
+          <div style="min-width:140px">
+            <label>Period</label>
+            <input id="periodInput" type="text" placeholder="e.g. P1" />
+          </div>
+        </div>
+      </div>
 
-  <div id="output"></div>
-</div>
+      <div style="margin-top:10px">
+        <label>Teacher</label>
+        <input id="teacherInput" type="text" placeholder="e.g. Mr. Rao" />
+      </div>
 
-<!-- Print Area -->
-<div class="print-area" id="printArea">
-  <h2>Gtk Substitution Timetable</h2>
-  <p id="printDateDay"></p>
-  <p id="printAbsent"></p>
-  <table id="printTable">
-    <tr><th>Class</th><th>Period</th><th>Absent Teacher</th><th>Substitute Teacher</th></tr>
-  </table>
-  <h4>Substitution Count Summary</h4>
-  <p id="substitutionSummary"></p>
-</div>
+      <div style="margin-top:12px;display:flex;gap:8px;align-items:center" class="no-print">
+        <button class="btn" id="addBtn">Add Entry</button>
+        <button class="btn edit no-print" id="saveEditBtn" style="display:none">Save Edit</button>
+        <button class="btn warn" id="deleteDayBtn">Delete Selected Day</button>
+        <button class="btn danger" id="resetBtn">Reset All</button>
+        <div id="resetConfirm" style="display:none" class="confirm-row">
+          <span class="muted">Confirm reset?</span>
+          <button class="btn del small-btn" id="confirmResetBtn">Yes, Reset</button>
+          <button class="btn secondary small-btn" id="cancelResetBtn">Cancel</button>
+        </div>
+      </div>
+
+      <table id="timetableTable" style="margin-top:14px">
+        <thead><tr><th>Day</th><th>Class</th><th>Period</th><th>Teacher</th><th class="actions">Actions</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <!-- Substitution section -->
+    <div class="card">
+      <h2 style="margin:0 0 8px 0">2. Today's Substitution</h2>
+      <div class="muted">System will use <strong>today's day</strong> automatically when you click Generate.</div>
+
+      <div style="margin-top:12px">
+        <label>Absent Teachers (comma separated)</label>
+        <textarea id="absentInput" rows="2" placeholder="e.g. Mr. Rao, Ms. Devi"></textarea>
+      </div>
+
+      <div style="margin-top:12px;display:flex;gap:8px" class="no-print">
+        <button class="btn" id="generateBtn">Generate Substitution</button>
+        <button class="btn secondary" id="clearOutputBtn">Clear Output</button>
+        <button class="btn ghost" id="exportJsonBtn">Export (backup)</button>
+        <button class="btn ghost" id="importJsonBtn">Import</button>
+        <input id="importFile" type="file" style="display:none" accept="application/json" />
+      </div>
+
+      <div id="outputArea" style="margin-top:12px"></div>
+      <div class="muted" style="margin-top:8px">Note: substitution duty counts are updated when you generate substitution (saved locally).</div>
+    </div>
+
+    <!-- Print area (hidden on regular view) -->
+    <div class="print-area" id="printArea">
+      <div style="text-align:center;margin-bottom:8px">
+        <div id="printSchool" style="font-size:18px;font-weight:600"></div>
+        <div style="font-size:13px;color:#444" id="printDateDay"></div>
+      </div>
+      <div style="margin-bottom:8px" id="printAbsentLine"></div>
+      <table id="printTable">
+        <thead><tr><th>Class</th><th>Period</th><th>Absent Teacher</th><th>Substitute</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div style="margin-top:10px">
+        <strong>Substitution Count Summary</strong>
+        <div id="printSummary" style="margin-top:6px;"></div>
+      </div>
+      <div style="margin-top:18px;text-align:right">
+        <div class="muted">Generated on <span id="printGenTimestamp"></span></div>
+      </div>
+    </div>
+
+  </div>
 
 <script>
-let timetable = JSON.parse(localStorage.getItem("schoolTimetable")) || {};
-let dutyCount = JSON.parse(localStorage.getItem("dutyCount")) || {};
+/* Storage keys */
+const KEY_TIMETABLE = 'stt_v2_timetable';
+const KEY_DUTY = 'stt_v2_duty';
+const KEY_SCHOOL = 'stt_v2_school';
 
-function updateTableDisplay() {
-  let table = document.getElementById("timetableDisplay");
-  table.innerHTML = "<tr><th>Day</th><th>Class</th><th>Period</th><th>Teacher</th></tr>";
-  for (let day in timetable) {
-    for (let period in timetable[day]) {
-      for (let cls in timetable[day][period]) {
-        table.innerHTML += `<tr><td>${day}</td><td>${cls}</td><td>${period}</td><td>${timetable[day][period][cls]}</td></tr>`;
-      }
-    }
-  }
+let timetable = JSON.parse(localStorage.getItem(KEY_TIMETABLE) || '{}');
+let dutyCount = JSON.parse(localStorage.getItem(KEY_DUTY) || '{}');
+let schoolName = localStorage.getItem(KEY_SCHOOL) || '';
+
+/* DOM refs */
+const daySelect = document.getElementById('daySelect');
+const classInput = document.getElementById('classInput');
+const periodInput = document.getElementById('periodInput');
+const teacherInput = document.getElementById('teacherInput');
+const addBtn = document.getElementById('addBtn');
+const timetableTableBody = document.querySelector('#timetableTable tbody');
+const resetBtn = document.getElementById('resetBtn');
+const resetConfirm = document.getElementById('resetConfirm');
+const confirmResetBtn = document.getElementById('confirmResetBtn');
+const cancelResetBtn = document.getElementById('cancelResetBtn');
+const deleteDayBtn = document.getElementById('deleteDayBtn');
+const generateBtn = document.getElementById('generateBtn');
+const outputArea = document.getElementById('outputArea');
+const absentInput = document.getElementById('absentInput');
+const todayLabel = document.getElementById('todayLabel');
+const printArea = document.getElementById('printArea');
+const printSchool = document.getElementById('printSchool');
+const printDateDay = document.getElementById('printDateDay');
+const printAbsentLine = document.getElementById('printAbsentLine');
+const printTableBody = document.querySelector('#printTable tbody');
+const printSummary = document.getElementById('printSummary');
+const printGenTimestamp = document.getElementById('printGenTimestamp');
+const schoolNameInput = document.getElementById('schoolName');
+const saveSchoolBtn = document.getElementById('saveSchoolBtn');
+const changeSchoolBtn = document.getElementById('changeSchoolBtn');
+const saveEditBtn = document.getElementById('saveEditBtn');
+const clearOutputBtn = document.getElementById('clearOutputBtn');
+const exportJsonBtn = document.getElementById('exportJsonBtn');
+const importJsonBtn = document.getElementById('importJsonBtn');
+const importFile = document.getElementById('importFile');
+
+let editTarget = null; // {day,period,cls}
+
+/* Utilities */
+function saveAll(){
+  localStorage.setItem(KEY_TIMETABLE, JSON.stringify(timetable));
+  localStorage.setItem(KEY_DUTY, JSON.stringify(dutyCount));
+  if (schoolName) localStorage.setItem(KEY_SCHOOL, schoolName);
 }
-
-function addTimetable() {
-  let day = document.getElementById("dayInput").value;
-  let cls = document.getElementById("classInput").value.trim();
-  let period = document.getElementById("periodInput").value.trim();
-  let teacher = document.getElementById("teacherInput").value.trim();
-  if (!day || !cls || !period || !teacher) return alert("Please fill all fields");
-
-  if (!timetable[day]) timetable[day] = {};
-  if (!timetable[day][period]) timetable[day][period] = {};
-  timetable[day][period][cls] = teacher;
-
-  localStorage.setItem("schoolTimetable", JSON.stringify(timetable));
-  updateTableDisplay();
-}
-
-function resetTimetable() {
-  if (confirm("Clear all saved timetable data?")) {
-    timetable = {};
-    dutyCount = {};
-    localStorage.removeItem("schoolTimetable");
-    localStorage.removeItem("dutyCount");
-    updateTableDisplay();
-  }
-}
-
-function getCurrentDay() {
-  const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+function getTodayName(){
+  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   return days[new Date().getDay()];
 }
+function niceDateTime(d=new Date()){
+  return d.toLocaleString('en-IN', { day:'2-digit', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit' });
+}
 
-function generateSubstitution() {
-  let absent = document.getElementById("absentInput").value.split(",").map(a => a.trim()).filter(a => a);
-  let today = getCurrentDay();
-  let todayData = timetable[today];
-  if (!todayData) return alert(`No timetable found for ${today}`);
+/* UI render */
+function refreshTodayLabel(){
+  const now = new Date();
+  todayLabel.textContent = `${now.toLocaleDateString('en-IN')} | ${getTodayName()}`;
+}
+function renderSchool(){
+  schoolNameInput.value = schoolName || '';
+  printSchool.textContent = schoolName || '';
+}
+function renderTimetable(){
+  timetableTableBody.innerHTML = '';
+  const days = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
+  days.forEach(day=>{
+    if(!timetable[day]) return;
+    const periods = Object.keys(timetable[day]).sort();
+    periods.forEach(period=>{
+      const classes = Object.keys(timetable[day][period]).sort();
+      classes.forEach(cls=>{
+        const teacher = timetable[day][period][cls];
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${day}</td><td>${cls}</td><td>${period}</td><td>${teacher}</td>
+          <td class="actions">
+            <button class="small-btn edit" data-day="${day}" data-period="${period}" data-class="${cls}">Edit</button>
+            <button class="small-btn del" data-day="${day}" data-period="${period}" data-class="${cls}">Delete</button>
+          </td>`;
+        timetableTableBody.appendChild(tr);
+      });
+    });
+  });
+  attachRowButtons();
+}
+function attachRowButtons(){
+  document.querySelectorAll('.small-btn.edit').forEach(b=>{
+    b.onclick = (e)=>{
+      const day = b.getAttribute('data-day');
+      const period = b.getAttribute('data-period');
+      const cls = b.getAttribute('data-class');
+      beginEdit(day, period, cls);
+    };
+  });
+  document.querySelectorAll('.small-btn.del').forEach(b=>{
+    b.onclick = (e)=>{
+      const day = b.getAttribute('data-day');
+      const period = b.getAttribute('data-period');
+      const cls = b.getAttribute('data-class');
+      if(!confirm(`Delete entry: ${day} ${period} ${cls}?`)) return;
+      delete timetable[day][period][cls];
+      if(Object.keys(timetable[day][period]||{}).length===0) delete timetable[day][period];
+      if(Object.keys(timetable[day]||{}).length===0) delete timetable[day];
+      saveAll(); renderTimetable();
+    };
+  });
+}
 
-  let allTeachers = new Set();
-  for (let p in todayData) {
-    for (let c in todayData[p]) allTeachers.add(todayData[p][c]);
-  }
-  let availableTeachers = [...allTeachers].filter(t => !absent.includes(t));
+/* Add / Edit handlers */
+addBtn.addEventListener('click', ()=>{
+  const day = daySelect.value.trim();
+  const cls = classInput.value.trim();
+  const period = periodInput.value.trim();
+  const teacher = teacherInput.value.trim();
+  if(!day || !cls || !period || !teacher){ alert('Please fill Day, Class, Period and Teacher'); return; }
+  timetable[day] = timetable[day] || {};
+  timetable[day][period] = timetable[day][period] || {};
+  timetable[day][period][cls] = teacher;
+  saveAll(); renderTimetable();
+  classInput.value=''; periodInput.value=''; teacherInput.value='';
+});
+function beginEdit(day, period, cls){
+  editTarget = {day,period,cls};
+  daySelect.value = day;
+  classInput.value = cls;
+  periodInput.value = period;
+  teacherInput.value = timetable[day][period][cls] || '';
+  addBtn.style.display = 'none';
+  saveEditBtn.style.display = 'inline-block';
+}
+saveEditBtn.addEventListener('click', ()=>{
+  if(!editTarget) return;
+  const newDay = daySelect.value.trim();
+  const newCls = classInput.value.trim();
+  const newPeriod = periodInput.value.trim();
+  const newTeacher = teacherInput.value.trim();
+  if(!newDay || !newCls || !newPeriod || !newTeacher){ alert('Complete fields to save edit'); return; }
+  // remove old
+  delete timetable[editTarget.day][editTarget.period][editTarget.cls];
+  if(Object.keys(timetable[editTarget.day][editTarget.period]||{}).length===0) delete timetable[editTarget.day][editTarget.period];
+  if(Object.keys(timetable[editTarget.day]||{}).length===0) delete timetable[editTarget.day];
+  // set new
+  timetable[newDay] = timetable[newDay] || {};
+  timetable[newDay][newPeriod] = timetable[newDay][newPeriod] || {};
+  timetable[newDay][newPeriod][newCls] = newTeacher;
+  saveAll(); renderTimetable();
+  // reset UI
+  editTarget = null;
+  addBtn.style.display = 'inline-block';
+  saveEditBtn.style.display = 'none';
+  classInput.value=''; periodInput.value=''; teacherInput.value='';
+});
 
-  let output = "<h3>Today's Substitution</h3>";
-  output += `<p>Date: ${new Date().toLocaleDateString()} | Day: ${today}</p>`;
-  output += `<p><b>Absent Teachers:</b> ${absent.join(", ") || "None"}</p>`;
-  output += "<table><tr><th>Class</th><th>Period</th><th>Absent Teacher</th><th>Substitute Teacher</th></tr>";
+/* Reset All (two-step confirmation) */
+resetBtn.addEventListener('click', ()=>{
+  resetConfirm.style.display = 'inline-flex';
+});
+cancelResetBtn.addEventListener('click', ()=>{
+  resetConfirm.style.display = 'none';
+});
+confirmResetBtn.addEventListener('click', ()=>{
+  if(!confirm('This will remove ALL timetable data and duty history. Proceed?')) { resetConfirm.style.display='none'; return; }
+  timetable = {}; dutyCount = {}; schoolName = '';
+  localStorage.removeItem(KEY_TIMETABLE);
+  localStorage.removeItem(KEY_DUTY);
+  localStorage.removeItem(KEY_SCHOOL);
+  renderAll();
+  resetConfirm.style.display = 'none';
+  alert('All data cleared.');
+});
 
-  let subs = [];
+/* Delete selected day */
+deleteDayBtn.addEventListener('click', ()=>{
+  const d = daySelect.value;
+  if(!timetable[d] || Object.keys(timetable[d]).length===0) return alert(`No entries for ${d}`);
+  if(!confirm(`Delete all timetable entries for ${d}?`)) return;
+  delete timetable[d];
+  saveAll(); renderTimetable();
+});
 
-  for (let p in todayData) {
-    for (let c in todayData[p]) {
-      let teacher = todayData[p][c];
-      if (absent.includes(teacher)) {
-        if (availableTeachers.length === 0) {
-          subs.push({cls: c, period: p, absent: teacher, substitute: "No substitute available"});
-          continue;
-        }
-        availableTeachers.sort((a,b)=>(dutyCount[a]||0)-(dutyCount[b]||0));
-        let substitute = availableTeachers[0];
-        subs.push({cls: c, period: p, absent: teacher, substitute});
-        dutyCount[substitute] = (dutyCount[substitute] || 0) + 1;
+/* School name handle */
+saveSchoolBtn.addEventListener('click', ()=>{
+  const v = schoolNameInput.value.trim();
+  if(!v) return alert('Enter school name');
+  schoolName = v;
+  saveAll();
+  renderSchool();
+  alert('School name saved');
+});
+changeSchoolBtn.addEventListener('click', ()=>{
+  schoolName = '';
+  localStorage.removeItem(KEY_SCHOOL);
+  renderSchool();
+});
+
+/* Export / Import JSON */
+exportJsonBtn.addEventListener('click', ()=>{
+  const blob = new Blob([JSON.stringify({timetable, dutyCount, schoolName},null,2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'substitution_backup.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+});
+importJsonBtn.addEventListener('click', ()=> importFile.click());
+importFile.addEventListener('change', (ev)=>{
+  const f = ev.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = (e)=>{
+    try{
+      const obj = JSON.parse(e.target.result);
+      if(obj.timetable) timetable = obj.timetable;
+      if(obj.dutyCount) dutyCount = obj.dutyCount;
+      if(obj.schoolName) schoolName = obj.schoolName;
+      saveAll(); renderAll();
+      alert('Imported successfully');
+    }catch(err){ alert('Invalid JSON file'); }
+  };
+  r.readAsText(f);
+});
+
+/* Generate substitution logic */
+function pickSubstitute(subject, unavailableSet){
+  // choose teacher with lowest duty count among available ones
+  // We will produce list of all teachers present in today's timetable
+  const today = getTodayTimetable();
+  const set = new Set();
+  if(!today) return null;
+  Object.keys(today).forEach(period=>{
+    Object.values(today[period]).forEach(t => set.add(t));
+  });
+  const candidates = [...set].filter(t => !unavailableSet.has(t));
+  if(candidates.length===0) return null;
+  candidates.sort((a,b)=>{
+    const ac = dutyCount[a]||0; const bc = dutyCount[b]||0;
+    if(ac!==bc) return ac-bc;
+    return a.localeCompare(b);
+  });
+  return candidates[0];
+}
+function getTodayTimetable(){
+  const today = getTodayName();
+  return timetable[today] || null;
+}
+
+generateBtn.addEventListener('click', ()=>{
+  const absentStr = absentInput.value.trim();
+  const absentList = absentStr ? absentStr.split(',').map(s=>s.trim()).filter(s=>s): [];
+  const todayName = getTodayName();
+  const todayTT = getTodayTimetable();
+  if(!todayTT) { alert(`No timetable defined for ${todayName}`); return; }
+
+  // build tasks: for each period,class where teacher is absent
+  const tasks = [];
+  Object.keys(todayTT).sort().forEach(period=>{
+    Object.keys(todayTT[period]).sort().forEach(cls=>{
+      const teacher = todayTT[period][cls];
+      if(absentList.includes(teacher)){
+        tasks.push({period, cls, absent: teacher});
       }
+    });
+  });
+
+  // assign substitutes ensuring same-period not double-booked
+  const periodAssigned = {}; // period -> Set of names assigned
+  const assignedRows = [];
+  tasks.forEach(task=>{
+    periodAssigned[task.period] = periodAssigned[task.period] || new Set();
+    const unavailable = new Set(absentList);
+    // also exclude teachers already assigned in same period
+    periodAssigned[task.period].forEach(t => unavailable.add(t));
+    const substitute = pickSubstitute(null, unavailable);
+    if(substitute){
+      assignedRows.push({...task, substitute});
+      periodAssigned[task.period].add(substitute);
+      dutyCount[substitute] = (dutyCount[substitute]||0) + 1;
+    } else {
+      assignedRows.push({...task, substitute: '(No available teacher)'});
     }
+  });
+
+  saveAll();
+  renderOutput(assignedRows, absentList);
+});
+
+/* Render output on page and prepare print area */
+function renderOutput(rows, absentList){
+  // header
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-IN', { day:'2-digit', month:'long', year:'numeric' });
+  const dayStr = getTodayName();
+  const ts = niceDateTime();
+
+  // page output
+  let html = `<div class="card"><strong>Substitution for ${dateStr} | ${dayStr}</strong><div class="muted" style="margin-top:6px">School: ${schoolName||'(School name not set)'}</div>`;
+  html += `<div style="margin-top:10px"><strong>Absent Teachers:</strong> ${absentList.length? escapeHtml(absentList.join(', ')) : 'None'}</div>`;
+  if(rows.length===0){
+    html += `<div style="margin-top:10px" class="muted">No substitution required.</div></div>`;
+    outputArea.innerHTML = html; preparePrint([], absentList, dateStr, dayStr, ts); return;
   }
-
-  localStorage.setItem("dutyCount", JSON.stringify(dutyCount));
-
-  subs.forEach(s => {
-    output += `<tr><td>${s.cls}</td><td>${s.period}</td><td>${s.absent}</td><td>${s.substitute}</td></tr>`;
+  html += `<table><thead><tr><th>Class</th><th>Period</th><th>Absent</th><th>Substitute</th></tr></thead><tbody>`;
+  rows.forEach(r=>{
+    html += `<tr><td>${escapeHtml(r.cls)}</td><td>${escapeHtml(r.period)}</td><td>${escapeHtml(r.absent)}</td><td>${escapeHtml(r.substitute)}</td></tr>`;
   });
-  output += "</table>";
+  html += `</tbody></table>`;
+  // duty summary small
+  const summary = Object.entries(dutyCount).sort((a,b)=>b[1]-a[1]).map(([t,c])=>`${escapeHtml(t)}: ${c}`).join(' | ');
+  html += `<div style="margin-top:10px"><strong>Substitution Count Summary:</strong><div class="muted" style="margin-top:6px">${summary||'No records yet'}</div></div></div>`;
+  outputArea.innerHTML = html;
 
-  // Display duty summary
-  output += "<h4>Substitution Count Summary</h4>";
-  let summary = Object.entries(dutyCount).map(([t,c]) => `${t}: ${c}`).join(" | ");
-  output += `<p>${summary || "No records yet."}</p>`;
-  
-  document.getElementById("output").innerHTML = output;
-
-  // Prepare print area
-  document.getElementById("printDateDay").innerText = `Date: ${new Date().toLocaleDateString()} | Day: ${today}`;
-  document.getElementById("printAbsent").innerText = `Absent Teachers: ${absent.join(", ") || "None"}`;
-  let printTable = document.getElementById("printTable");
-  printTable.innerHTML = "<tr><th>Class</th><th>Period</th><th>Absent Teacher</th><th>Substitute Teacher</th></tr>";
-  subs.forEach(s => {
-    printTable.innerHTML += `<tr><td>${s.cls}</td><td>${s.period}</td><td>${s.absent}</td><td>${s.substitute}</td></tr>`;
+  // prepare print area
+  preparePrint(rows, absentList, dateStr, dayStr, ts);
+}
+function preparePrint(rows, absentList, dateStr, dayStr, timestamp){
+  // populate printArea
+  printSchool.textContent = schoolName || '';
+  printDateDay.textContent = `Date: ${dateStr} | Day: ${dayStr}`;
+  printAbsentLine.textContent = `Absent Teachers: ${absentList.length? absentList.join(', ') : 'None'}`;
+  printTableBody.innerHTML = '';
+  rows.forEach(r=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${escapeHtml(r.cls)}</td><td>${escapeHtml(r.period)}</td><td>${escapeHtml(r.absent)}</td><td>${escapeHtml(r.substitute)}</td>`;
+    printTableBody.appendChild(tr);
   });
-  document.getElementById("substitutionSummary").innerText = summary || "No records yet.";
+  const summaryHtml = Object.entries(dutyCount).sort((a,b)=>b[1]-a[1]).map(([t,c])=>`${escapeHtml(t)} — ${c}`).join(' | ');
+  printSummary.innerHTML = summaryHtml || 'No records yet';
+  printGenTimestamp.textContent = timestamp;
+  // show print dialog
+  setTimeout(()=> window.print(), 200);
 }
 
-function printSubstitution() {
-  window.print();
-}
+/* small helpers */
+function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-updateTableDisplay();
+/* clear output */
+clearOutputBtn.addEventListener('click', ()=>{
+  outputArea.innerHTML = '';
+});
+
+/* utility to render everything */
+function renderAll(){
+  refreshTodayLabel();
+  renderSchool();
+  renderTimetable();
+  // show school name in top if empty show placeholder
+}
+renderAll();
+
+/* load stored values on start */
+(function init(){
+  schoolName = localStorage.getItem(KEY_SCHOOL) || schoolName;
+  dutyCount = JSON.parse(localStorage.getItem(KEY_DUTY) || JSON.stringify(dutyCount));
+  timetable = JSON.parse(localStorage.getItem(KEY_TIMETABLE) || JSON.stringify(timetable));
+  renderAll();
+})();
+
+/* update today label every minute (keeps time fresh) */
+setInterval(refreshTodayLabel, 60*1000);
+
+/* Helper: show today's day on page load */
+(function setTodayLabelOnLoad(){
+  const now = new Date();
+  const dd = now.toLocaleDateString('en-IN', { day:'2-digit', month:'long', year:'numeric' });
+  const dname = getTodayName();
+  todayLabel.textContent = `${dd} | ${dname}`;
+})();
+
+/* helper: get day name */
+function getTodayName(){
+  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  return days[new Date().getDay()];
+}
 </script>
 </body>
 </html>
