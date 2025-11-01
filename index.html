@@ -1,0 +1,367 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Gtk Substitution Timetable</title>
+  <style>
+    :root{--brand:#0f62fe;--muted:#666}
+    body{font-family:Inter,system-ui,Arial,Helvetica,sans-serif;margin:0;padding:16px;background:#f6f8fb;color:#0b2545}
+    header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    h1{margin:0;font-size:18px}
+    .card{background:#fff;border-radius:10px;padding:12px;box-shadow:0 6px 18px rgba(11,37,69,0.06);margin-top:12px}
+    label{display:block;font-size:13px;margin-bottom:6px}
+    input,select,button,textarea{font-size:14px;padding:8px;border-radius:6px;border:1px solid #d6dbe8}
+    .row{display:flex;gap:8px;flex-wrap:wrap}
+    .col{flex:1;min-width:180px}
+    .small{width:110px}
+    .teachers-list, .timetable-editor, .absent-panel, .output-panel{margin-top:12px}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:8px;border-bottom:1px solid #eee;text-align:left;font-size:14px}
+    th{background:#fbfdff}
+    .right{text-align:right}
+    .muted{color:var(--muted);font-size:13px}
+    .btn{background:var(--brand);color:#fff;border:none;padding:8px 12px;border-radius:8px;cursor:pointer}
+    .btn.secondary{background:#f2f5ff;color:var(--brand);border:1px solid #d6e0ff}
+    .actions{display:flex;gap:8px}
+    @media(print){
+      header, .controls, .teachers-list .card-controls, .timetable-editor .card-controls, .actions{display:none}
+      body{background:#fff}
+      .card{box-shadow:none;border-radius:0}
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Gtk Substitution Timetable Generator</h1>
+      <div class="muted">Create and print a daily substitution timetable — saves locally on your phone</div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btn-generate">Generate Substitution</button>
+      <button class="btn secondary" id="btn-print">Print / Export</button>
+    </div>
+  </header>  <section class="card teachers-list">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <strong>Teachers (with subject & total substitution count)</strong>
+      <div class="card-controls">
+        <button id="btn-reset" class="btn secondary">Reset Sample Data</button>
+      </div>
+    </div>
+    <div style="margin-top:8px" class="row">
+      <input id="tname" placeholder="Teacher name (e.g. Mr. Rao)" />
+      <input id="tsub" placeholder="Subject (e.g. Math)" />
+      <input id="tcount" placeholder="Sub count (0)" class="small" />
+      <button id="btn-add-teacher" class="btn">Add Teacher</button>
+    </div>
+    <div style="margin-top:12px">
+      <table id="teachers-table"><thead><tr><th>Teacher</th><th>Subject</th><th>Sub Count</th><th class="right">Actions</th></tr></thead><tbody></tbody></table>
+    </div>
+  </section>  <section class="card timetable-editor">
+    <strong>Timetable Editor (one-time / update anytime)</strong>
+    <div class="muted" style="margin-top:6px">Define classes and periods. You can edit cells directly.</div>
+    <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input id="class-name" placeholder="Class name (e.g. 10A)" />
+      <input id="period-name" placeholder="Period name (e.g. P1)" />
+      <input id="teacher-for-cell" placeholder="Teacher name (e.g. Mr. Rao)" />
+      <button id="btn-add-cell" class="btn">Add/Set Cell</button>
+      <button id="btn-clear-timet" class="btn secondary">Clear Timetable</button>
+    </div><div style="margin-top:12px;overflow:auto">
+  <table id="timetable-table"><thead><tr><th>Class \ Period</th></tr></thead><tbody></tbody></table>
+</div>
+
+  </section>  <section class="card absent-panel">
+    <strong>Mark Absent Teachers Today</strong>
+    <div class="muted" style="margin-top:6px">Checked teachers will be considered absent when generating substitution.</div>
+    <div id="absent-list" style="margin-top:8px"></div>
+  </section>  <section class="card output-panel">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <strong>Generated Substitution Timetable</strong>
+      <div class="muted" id="header-date"></div>
+    </div>
+    <div id="output-area" style="margin-top:12px"></div>
+  </section>  <script>
+    // --- Local storage keys
+    const KEY_TEACHERS = 'stt_teachers_v1';
+    const KEY_TIMETABLE = 'stt_timetable_v1';
+    const KEY_SUB_HISTORY = 'stt_sub_history_v1'; // { teacherName: count }
+
+    // --- DOM refs
+    const teachersTableBody = document.querySelector('#teachers-table tbody');
+    const btnAddTeacher = document.getElementById('btn-add-teacher');
+    const tname = document.getElementById('tname');
+    const tsub = document.getElementById('tsub');
+    const tcount = document.getElementById('tcount');
+    const btnReset = document.getElementById('btn-reset');
+
+    const btnAddCell = document.getElementById('btn-add-cell');
+    const classNameInput = document.getElementById('class-name');
+    const periodNameInput = document.getElementById('period-name');
+    const teacherForCell = document.getElementById('teacher-for-cell');
+    const timetableTable = document.getElementById('timetable-table');
+    const btnClearTimet = document.getElementById('btn-clear-timet');
+
+    const absentListDiv = document.getElementById('absent-list');
+    const btnGenerate = document.getElementById('btn-generate');
+    const btnPrint = document.getElementById('btn-print');
+    const outputArea = document.getElementById('output-area');
+    const headerDate = document.getElementById('header-date');
+
+    // --- In-memory structures
+    let teachers = []; // {name, subject}
+    let timetable = {}; // { period1: {class1: teacherName, class2: teacherName}, period2: {...} }
+    let subHistory = {}; // teacherName -> count
+
+    // --- Helpers
+    function saveAll(){
+      localStorage.setItem(KEY_TEACHERS, JSON.stringify(teachers));
+      localStorage.setItem(KEY_TIMETABLE, JSON.stringify(timetable));
+      localStorage.setItem(KEY_SUB_HISTORY, JSON.stringify(subHistory));
+    }
+    function loadAll(){
+      teachers = JSON.parse(localStorage.getItem(KEY_TEACHERS) || '[]');
+      timetable = JSON.parse(localStorage.getItem(KEY_TIMETABLE) || '{}');
+      subHistory = JSON.parse(localStorage.getItem(KEY_SUB_HISTORY) || '{}');
+    }
+
+    function renderTeachers(){
+      teachersTableBody.innerHTML = '';
+      teachers.forEach(t => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${escapeHtml(t.name)}</td><td>${escapeHtml(t.subject||'')}</td><td>${subHistory[t.name]||0}</td><td class='right'><button data-name="${escapeHtml(t.name)}" class='btn secondary btn-del'>Delete</button></td>`;
+        teachersTableBody.appendChild(tr);
+      });
+      // attach delete
+      document.querySelectorAll('.btn-del').forEach(b=>{
+        b.addEventListener('click', e=>{
+          const name = e.currentTarget.getAttribute('data-name');
+          teachers = teachers.filter(x=>x.name!==name);
+          delete subHistory[name];
+          saveAll(); renderTeachers(); renderAbsentList(); renderTimetable();
+        });
+      });
+    }
+
+    function renderTimetable(){
+      // Gather periods and classes
+      const periods = Object.keys(timetable).sort();
+      const classes = new Set();
+      periods.forEach(p=>Object.keys(timetable[p]||{}).forEach(c=>classes.add(c)));
+      const cls = Array.from(classes).sort();
+
+      // Build header
+      const thead = timetableTable.querySelector('thead tr');
+      thead.innerHTML = '<th>Class \ Period</th>' + periods.map(p=>`<th>${escapeHtml(p)}</th>`).join('');
+      // Build rows
+      const tbody = timetableTable.querySelector('tbody');
+      tbody.innerHTML = '';
+      cls.forEach(c=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td><strong>${escapeHtml(c)}</strong></td>` + periods.map(p=>{
+          const val = (timetable[p] && timetable[p][c])? timetable[p][c] : '';
+          return `<td contenteditable data-period="${escapeHtml(p)}" data-class="${escapeHtml(c)}">${escapeHtml(val)}</td>`;
+        }).join('');
+        tbody.appendChild(tr);
+      });
+
+      // attach blur events to save edits
+      tbody.querySelectorAll('td[contenteditable]').forEach(td=>{
+        td.addEventListener('blur', e=>{
+          const p = td.getAttribute('data-period');
+          const c = td.getAttribute('data-class');
+          const v = td.innerText.trim();
+          timetable[p] = timetable[p] || {}; 
+          if(v) timetable[p][c] = v; else delete timetable[p][c];
+          // cleanup empty period
+          if(Object.keys(timetable[p]).length===0) delete timetable[p];
+          saveAll(); renderTimetable();
+        });
+      });
+    }
+
+    function renderAbsentList(){
+      absentListDiv.innerHTML = '';
+      teachers.forEach(t=>{
+        const id = `abs_${hash(t.name)}`;
+        const div = document.createElement('div');
+        div.innerHTML = `<label><input type='checkbox' id='${id}' data-name='${escapeHtml(t.name)}'/> ${escapeHtml(t.name)} (${escapeHtml(t.subject||'')})</label>`;
+        absentListDiv.appendChild(div);
+      });
+    }
+
+    function escapeHtml(s){
+      return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+    function hash(s){ return btoa(unescape(encodeURIComponent(s))).replace(/=+$/,''); }
+
+    // --- Core logic: choose substitute
+    function pickSubstitute(subject, period, className, absentSet, assignedForPeriod){
+      // Candidate teachers: not absent, not already assigned for same period, prefer same subject, lowest subHistory
+      const candidates = teachers.filter(t=>!absentSet.has(t.name) && !assignedForPeriod.has(t.name));
+      if(candidates.length===0) return null;
+      // rank by (subjectMatch ? 0 : 1) then by subHistory
+      candidates.sort((a,b)=>{
+        const aMatch = (a.subject && subject && a.subject.toLowerCase()===subject.toLowerCase())?0:1;
+        const bMatch = (b.subject && subject && b.subject.toLowerCase()===subject.toLowerCase())?0:1;
+        if(aMatch!==bMatch) return aMatch-bMatch;
+        const ac = subHistory[a.name]||0; const bc = subHistory[b.name]||0; if(ac!==bc) return ac-bc;
+        // tie-breaker: alphabetical
+        return a.name.localeCompare(b.name);
+      });
+      return candidates[0].name;
+    }
+
+    function generateSubstitution(){
+      // find absent teachers
+      const absentSet = new Set();
+      absentListDiv.querySelectorAll('input[type=checkbox]').forEach(inp=>{ if(inp.checked) absentSet.add(inp.getAttribute('data-name')); });
+
+      // Build output rows: for each period, for each class where teacher is absent
+      const periods = Object.keys(timetable).sort();
+      const classes = new Set();
+      periods.forEach(p=>Object.keys(timetable[p]||{}).forEach(c=>classes.add(c)));
+      const cls = Array.from(classes).sort();
+
+      // Prepare substitution table: rows with class, period, absent teacher, substitute
+      const rows = [];
+      // Track assignments per period to avoid double-booking
+      const periodAssignments = {}; // period -> Set of teacher names assigned
+
+      periods.forEach(p=>{
+        periodAssignments[p] = new Set();
+      });
+
+      // For fairness we will iterate periods in normal order, but for each absent class we pick substitute using global lowest count
+      // Build list of tasks first to ensure fairness across tasks
+      const tasks = [];
+      periods.forEach(p=>{
+        cls.forEach(c=>{
+          const assigned = (timetable[p] && timetable[p][c])? timetable[p][c] : null;
+          if(assigned && absentSet.has(assigned)){
+            // find subject for the assigned teacher if available
+            const teacherObj = teachers.find(tt=>tt.name===assigned);
+            const subject = teacherObj ? teacherObj.subject : '';
+            tasks.push({period:p,className:c,absent:assigned,subject});
+          }
+        });
+      });
+
+      // Sort tasks so that subject-matching distribution and fairness are better: by absent teacher's subHistory desc so those with more duties earlier? We'll keep natural order.
+
+      tasks.forEach(task=>{
+        const p = task.period; const c = task.className;
+        const assignedForPeriod = periodAssignments[p];
+        const sub = pickSubstitute(task.subject, p, c, absentSet, assignedForPeriod);
+        if(sub){
+          rows.push({className:c,period:p,absent:task.absent,substitute:sub});
+          // register assignment
+          periodAssignments[p].add(sub);
+          subHistory[sub] = (subHistory[sub]||0) + 1;
+        } else {
+          rows.push({className:c,period:p,absent:task.absent,substitute:'(NO AVAILABLE TEACHER)'});
+        }
+      });
+
+      // save history
+      saveAll();
+      renderTeachers();
+      renderOutput(rows);
+    }
+
+    function renderOutput(rows){
+      // header with date and day
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+      const dayStr = now.toLocaleDateString('en-IN', { weekday: 'long' });
+      headerDate.innerText = `Date: ${dateStr} | Day: ${dayStr}`;
+
+      // build printable area
+      let html = `<div style='margin-bottom:10px'><h3 style='margin:0'>School Substitution Timetable</h3><div class='muted'>Date: ${dateStr} | Day: ${dayStr}</div></div>`;
+      if(rows.length===0){ html += `<div class='muted'>No substitutions required for selected absent teachers.</div>`; outputArea.innerHTML = html; return; }
+
+      html += `<table><thead><tr><th>Class</th><th>Period</th><th>Absent Teacher</th><th>Substitute Teacher</th></tr></thead><tbody>`;
+      rows.forEach(r=>{
+        html += `<tr><td>${escapeHtml(r.className)}</td><td>${escapeHtml(r.period)}</td><td>${escapeHtml(r.absent)}</td><td>${escapeHtml(r.substitute)}</td></tr>`;
+      });
+      html += `</tbody></table>`;
+      html += `<div style='margin-top:10px' class='muted'>Generated on ${dateStr} (${dayStr}).</div>`;
+      outputArea.innerHTML = html;
+    }
+
+    // --- UI actions
+    btnAddTeacher.addEventListener('click', ()=>{
+      const name = tname.value.trim(); const subject = tsub.value.trim(); const count = parseInt(tcount.value)||0;
+      if(!name) return alert('Enter teacher name');
+      if(teachers.find(x=>x.name===name)) return alert('Teacher already exists');
+      teachers.push({name,subject});
+      subHistory[name] = count;
+      saveAll(); renderTeachers(); renderAbsentList();
+      tname.value=''; tsub.value=''; tcount.value='';
+    });
+
+    btnReset.addEventListener('click', ()=>{
+      if(!confirm('Load sample data? This will overwrite current data.')) return;
+      loadSampleData(); saveAll(); loadAll(); renderAll();
+    });
+
+    btnAddCell.addEventListener('click', ()=>{
+      const cls = classNameInput.value.trim(); const per = periodNameInput.value.trim(); const teacher = teacherForCell.value.trim();
+      if(!cls || !per) return alert('Provide class and period');
+      timetable[per] = timetable[per] || {};
+      if(teacher) timetable[per][cls] = teacher; else delete timetable[per][cls];
+      // cleanup
+      if(Object.keys(timetable[per]).length===0) delete timetable[per];
+      saveAll(); renderTimetable();
+      classNameInput.value=''; periodNameInput.value=''; teacherForCell.value='';
+    });
+
+    btnClearTimet.addEventListener('click', ()=>{
+      if(!confirm('Clear the entire timetable?')) return;
+      timetable = {}; saveAll(); renderTimetable();
+    });
+
+    btnGenerate.addEventListener('click', ()=>{
+      generateSubstitution();
+      window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});
+    });
+
+    btnPrint.addEventListener('click', ()=>{
+      // Ensure output has date/day
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+      const dayStr = now.toLocaleDateString('en-IN', { weekday: 'long' });
+      headerDate.innerText = `Date: ${dateStr} | Day: ${dayStr}`;
+      // print
+      window.print();
+    });
+
+    // --- initial sample data for a new user
+    function loadSampleData(){
+      teachers = [
+        {name:'Mr. Rao', subject:'Math'},
+        {name:'Ms. Devi', subject:'English'},
+        {name:'Mr. Roy', subject:'Science'},
+        {name:'Ms. Nisha', subject:'Math'},
+        {name:'Mr. Kumar', subject:'Social'}
+      ];
+      timetable = {
+        'P1': {'10A':'Mr. Rao','10B':'Ms. Devi'},
+        'P2': {'10A':'Ms. Devi','10B':'Mr. Roy'},
+        'P3': {'10A':'Mr. Rao','10B':'Mr. Kumar'}
+      };
+      subHistory = {};
+      teachers.forEach(t=>{ subHistory[t.name] = subHistory[t.name]||0; });
+      saveAll();
+    }
+
+    // --- utilities
+    function renderAll(){ renderTeachers(); renderTimetable(); renderAbsentList(); }
+
+    // load or initialize
+    loadAll();
+    if(teachers.length===0 && Object.keys(timetable).length===0){ loadSampleData(); loadAll(); }
+    renderAll();
+
+  </script></body>
+</html>
